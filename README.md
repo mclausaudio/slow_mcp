@@ -1,36 +1,91 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Slow MCP Server
 
-## Getting Started
+A minimal MCP (Model Context Protocol) server deployed on Vercel, built to test how MCP clients handle slow or long-running tool calls — particularly around proxy timeout boundaries.
 
-First, run the development server:
+**Live server:** `https://slowmcptest.vercel.app/api/mcp`
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## Tools
+
+| Tool | Description |
+|------|-------------|
+| `fast_echo` | Immediately returns the input message. Proves basic connectivity works. |
+| `slow_echo` | Waits for a configurable delay (default 35s), then returns the message. Tests timeout behavior. |
+
+### `fast_echo`
+
+```json
+{ "message": "hello" }
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Returns `"hello"` immediately.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### `slow_echo`
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```json
+{ "message": "hello", "delay_seconds": 35 }
+```
 
-## Learn More
+Returns `"[after 35s delay] hello"` after waiting 35 seconds. The `delay_seconds` parameter is optional and defaults to 35.
 
-To learn more about Next.js, take a look at the following resources:
+## How it works
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+This is a Next.js app with a single API route (`app/api/[transport]/route.ts`) that uses [`mcp-handler`](https://www.npmjs.com/package/mcp-handler) to serve MCP over Streamable HTTP. The `[transport]` dynamic segment lets `mcp-handler` route between `/api/mcp`, `/api/sse`, and `/api/message` endpoints automatically.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+The Vercel function is configured with `maxDuration: 60` to allow tool calls up to 60 seconds.
 
-## Deploy on Vercel
+## Connecting
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### MCP Inspector
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1. Open [MCP Inspector](https://github.com/modelcontextprotocol/inspector)
+2. Set transport to **Streamable HTTP**
+3. Enter URL: `https://slowmcptest.vercel.app/api/mcp` (or `http://localhost:3000/api/mcp` for local)
+
+### Claude Desktop / Cursor / Windsurf
+
+Add to your MCP config:
+
+```json
+{
+  "mcpServers": {
+    "slow-mcp-test": {
+      "url": "https://slowmcptest.vercel.app/api/mcp"
+    }
+  }
+}
+```
+
+For clients that only support stdio, use [mcp-remote](https://www.npmjs.com/package/mcp-remote):
+
+```json
+{
+  "mcpServers": {
+    "slow-mcp-test": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "https://slowmcptest.vercel.app/api/mcp"]
+    }
+  }
+}
+```
+
+## Local development
+
+```bash
+npm install
+npm run dev
+```
+
+The MCP endpoint will be at `http://localhost:3000/api/mcp`.
+
+## Deploy
+
+```bash
+vercel
+```
+
+## Tech stack
+
+- [Next.js](https://nextjs.org) (App Router)
+- [mcp-handler](https://www.npmjs.com/package/mcp-handler) — Vercel adapter for MCP
+- [@modelcontextprotocol/sdk](https://www.npmjs.com/package/@modelcontextprotocol/sdk) — MCP TypeScript SDK
+- [Zod](https://zod.dev) — Schema validation for tool inputs
